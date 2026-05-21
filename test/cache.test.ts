@@ -207,7 +207,9 @@ describe("Cache", () => {
     });
 
     it("deletes the entry automatically even without a read", () => {
-      const cache = new Cache<number>();
+      // sweepDelay: 0 opts out of sweep coalescing so the physical delete
+      // happens at the exact moment of expiry, which this test asserts on.
+      const cache = new Cache<number>({ sweepDelay: 0 });
       cache.set("k", 1, { ttl: 100 });
       vi.advanceTimersByTime(150);
       expect(cache.size).toBe(0);
@@ -225,7 +227,7 @@ describe("Cache", () => {
     });
 
     it("reschedules for the next-soonest after one expires", () => {
-      const cache = new Cache<number>();
+      const cache = new Cache<number>({ sweepDelay: 0 });
       cache.set("a", 1, { ttl: 100 });
       cache.set("b", 2, { ttl: 500 });
       vi.advanceTimersByTime(150);
@@ -242,6 +244,55 @@ describe("Cache", () => {
       vi.advanceTimersByTime(100);
       expect(cache.has("early")).toBe(false);
       expect(cache.has("late")).toBe(true);
+      cache.clear();
+    });
+  });
+
+  describe("with a large sweepDelay", () => {
+    it("hides expired entries from get() before the sweep fires", () => {
+      const cache = new Cache<number>({ sweepDelay: 60_000 });
+      cache.set("k", 1, { ttl: 100 });
+      vi.advanceTimersByTime(200);
+      // Sweep is scheduled for ~60s out; get() must still observe expiry now.
+      expect(cache.get("k")).toBeUndefined();
+      cache.clear();
+    });
+
+    it("hides expired entries from has() before the sweep fires", () => {
+      const cache = new Cache<number>({ sweepDelay: 60_000 });
+      cache.set("k", 1, { ttl: 100 });
+      vi.advanceTimersByTime(200);
+      expect(cache.has("k")).toBe(false);
+      cache.clear();
+    });
+
+    it("skips expired entries in mget() before the sweep fires", () => {
+      const cache = new Cache<number>({ sweepDelay: 60_000 });
+      cache.set("a", 1);
+      cache.set("b", 2, { ttl: 100 });
+      vi.advanceTimersByTime(200);
+      expect(cache.mget(["a", "b"])).toEqual({ a: 1 });
+      cache.clear();
+    });
+
+    it("drops expired entries from keys() before the sweep fires", () => {
+      const cache = new Cache<number>({ sweepDelay: 60_000 });
+      cache.set("live", 1);
+      cache.set("dead", 2, { ttl: 100 });
+      vi.advanceTimersByTime(200);
+      expect(cache.keys()).toEqual(["live"]);
+      cache.clear();
+    });
+
+    it("prunes multiple keys expiring within the window in one sweep", () => {
+      const cache = new Cache<number>({ sweepDelay: 1_000 });
+      cache.set("a", 1, { ttl: 100 });
+      cache.set("b", 2, { ttl: 200 });
+      cache.set("c", 3, { ttl: 500 });
+      // First expiry at 100ms + 1000ms sweepDelay = sweep at t=1100ms.
+      // All three (100/200/500) have expired by then and prune in one pass.
+      vi.advanceTimersByTime(1101);
+      expect(cache.size).toBe(0);
       cache.clear();
     });
   });
@@ -282,24 +333,6 @@ describe("Cache", () => {
       cache.set("k", 99, { ttl: 0 });
       expect(cache.get("k")).toBeUndefined();
       expect(cache.size).toBe(0);
-      cache.clear();
-    });
-  });
-
-  describe("with defaultTtl", () => {
-    it("applies to entries that do not specify a ttl", () => {
-      const cache = new Cache<number>({ defaultTtl: 500 });
-      cache.set("k", 1);
-      vi.advanceTimersByTime(501);
-      expect(cache.get("k")).toBeUndefined();
-      cache.clear();
-    });
-
-    it("is overridden by a per-set ttl", () => {
-      const cache = new Cache<number>({ defaultTtl: 100 });
-      cache.set("k", 1, { ttl: 10_000 });
-      vi.advanceTimersByTime(500);
-      expect(cache.get("k")).toBe(1);
       cache.clear();
     });
   });
@@ -411,15 +444,6 @@ describe("Cache", () => {
       cache.clear();
     });
 
-    it("falls back to defaultTtl when no ttl is given", () => {
-      const cache = new Cache<number>({ defaultTtl: 100 });
-      cache.mset({ a: 1, b: 2 });
-      vi.advanceTimersByTime(200);
-      expect(cache.get("a")).toBeUndefined();
-      expect(cache.get("b")).toBeUndefined();
-      cache.clear();
-    });
-
     it("respects ttl <= 0 (entries are not stored)", () => {
       const cache = new Cache<number>();
       cache.mset({ a: 1, b: 2 }, { ttl: 0 });
@@ -466,14 +490,6 @@ describe("Cache", () => {
       cache.incr("k");                    // 500ms into the 1000ms window
       vi.advanceTimersByTime(600);        // 1100ms total → past expiry
       expect(cache.get("k")).toBeUndefined();
-      cache.clear();
-    });
-
-    it("creates new keys without a TTL even when defaultTtl is set", () => {
-      const cache = new Cache<number>({ defaultTtl: 200 });
-      cache.incr("k");
-      vi.advanceTimersByTime(1000);
-      expect(cache.get("k")).toBe(1);     // still alive — no TTL applied
       cache.clear();
     });
 
@@ -580,24 +596,6 @@ describe("Cache", () => {
       });
     });
 
-    describe("defaultTtl", () => {
-      it("rejects zero", () => {
-        expect(() => new Cache({ defaultTtl: 0 })).toThrow(TypeError);
-      });
-
-      it("rejects negative numbers", () => {
-        expect(() => new Cache({ defaultTtl: -100 })).toThrow(TypeError);
-      });
-
-      it("rejects NaN", () => {
-        expect(() => new Cache({ defaultTtl: NaN })).toThrow(TypeError);
-      });
-
-      it("rejects Infinity", () => {
-        expect(() => new Cache({ defaultTtl: Infinity })).toThrow(TypeError);
-      });
-    });
-
     describe("ttl in set()", () => {
       it("rejects NaN", () => {
         const cache = new Cache<number>();
@@ -671,6 +669,16 @@ describe("Cache.getOrCompute", () => {
       expect(compute).not.toHaveBeenCalled();
       cache.clear();
     });
+
+    it("treats a cached undefined as a hit (does not re-compute)", async () => {
+      const cache = new Cache<number | undefined>();
+      cache.set("k", undefined);
+      const compute = vi.fn(async () => 999);
+      const result = await cache.getOrCompute("k", compute);
+      expect(result).toBeUndefined();
+      expect(compute).not.toHaveBeenCalled();
+      cache.clear();
+    });
   });
 
   describe("on cache miss", () => {
@@ -699,13 +707,6 @@ describe("Cache.getOrCompute", () => {
       cache.clear();
     });
 
-    it("falls back to defaultTtl when no ttl is given", async () => {
-      const cache = new Cache<number>({ defaultTtl: 100 });
-      await cache.getOrCompute("k", async () => 1);
-      vi.advanceTimersByTime(200);
-      expect(cache.get("k")).toBeUndefined();
-      cache.clear();
-    });
   });
 
   describe("with concurrent callers", () => {

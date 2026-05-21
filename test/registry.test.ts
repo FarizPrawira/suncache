@@ -29,13 +29,16 @@ describe("Cache.for", () => {
 
     it("ignores options passed to subsequent calls (first call wins)", () => {
       const name = `cfg-${Math.random()}`;
-      const first = Cache.for<number>(name, { defaultTtl: 100 });
-      const second = Cache.for<number>(name, { defaultTtl: 999_999 });
+      const first = Cache.for<number>(name, { maxSize: 1 });
+      const second = Cache.for<number>(name, { maxSize: 999 });
       expect(second).toBe(first);
 
-      first.set("k", 1);
-      vi.advanceTimersByTime(200);
-      expect(first.get("k")).toBeUndefined();
+      // If the second call's options applied, maxSize would be 999 and both
+      // keys would fit. With first call winning (maxSize: 1), "a" is evicted.
+      first.set("a", 1);
+      first.set("b", 2);
+      expect(first.get("a")).toBeUndefined();
+      expect(first.get("b")).toBe(2);
       first.clear();
     });
   });
