@@ -1,6 +1,6 @@
 {
   "name": "suncache",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Process-local in-memory cache for Node.js with TTL, named instances, and stampede protection. Single-process — no cross-server sharing.",
   "type": "module",
   "main": "./dist/index.cjs",
