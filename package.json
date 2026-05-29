@@ -14,14 +14,17 @@
     }
   },
   "files": [
-    "dist"
+    "dist/**/*.js",
+    "dist/**/*.cjs",
+    "dist/**/*.d.ts",
+    "dist/**/*.d.cts"
   ],
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck:test": "tsc -p tsconfig.test.json",
-    "verify": "npm run typecheck:test && npm test && npm run build",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "verify": "npm run typecheck && npm test && npm run build",
     "preversion": "npm run verify",
     "postversion": "git push --follow-tags",
     "prepublishOnly": "npm run verify"
@@ -45,13 +48,13 @@
   "homepage": "https://github.com/FarizPrawira/suncache#readme",
   "sideEffects": false,
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.0.0",
     "@vitest/coverage-v8": "^4.1.6",
     "tsup": "^8.5.1",
-    "typescript": "^5.4.0",
+    "typescript": "^5.6.0",
     "vitest": "^4.1.6"
   }
 }

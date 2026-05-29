@@ -61,7 +61,7 @@ export class SortedSet {
     const lo = this.bisectScore(min, true);
     const hi = this.bisectScore(max, false);
     const out: string[] = [];
-    for (let i = lo; i < hi; i++) out.push(this.sorted[i].member);
+    for (let i = lo; i < hi; i++) out.push(this.sorted[i]!.member);
     return out;
   }
 
@@ -80,9 +80,9 @@ export class SortedSet {
       // Rank 0 in reverse view = last element in ascending sorted array.
       const from = len - 1 - s;
       const to = len - 1 - e;
-      for (let i = from; i >= to; i--) out.push(this.sorted[i].member);
+      for (let i = from; i >= to; i--) out.push(this.sorted[i]!.member);
     } else {
-      for (let i = s; i <= e; i++) out.push(this.sorted[i].member);
+      for (let i = s; i <= e; i++) out.push(this.sorted[i]!.member);
     }
     return out;
   }
@@ -106,7 +106,7 @@ export class SortedSet {
     let hi = this.sorted.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
-      const e = this.sorted[mid];
+      const e = this.sorted[mid]!;
       if (e.score < score || (e.score === score && e.member < member)) {
         lo = mid + 1;
       } else {
@@ -123,7 +123,7 @@ export class SortedSet {
     let hi = this.sorted.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
-      const s = this.sorted[mid].score;
+      const s = this.sorted[mid]!.score;
       if (leftmost ? s < score : s <= score) lo = mid + 1;
       else hi = mid;
     }
